@@ -1,5 +1,6 @@
 import os
 import httpx
+import asyncio
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from openai import AsyncOpenAI
@@ -23,15 +24,11 @@ def split_text(text, max_length=MAX_MESSAGE_LENGTH):
     return [text[i:i + max_length] for i in range(0, len(text), max_length)]
 
 async def generate_response(text: str):
-    try:
-        completion = await client.chat.completions.create(
-            model="deepseek/deepseek-chat-v3-0324:free",
-            messages=[{"role": "user", "content": text}],
-        )
-        return completion.choices[0].message.content
-    except Exception as e:
-        print(f"Ошибка при генерации ответа: {e}")
-        return "Извините, произошла ошибка при обработке вашего запроса."
+    completion = await client.chat.completions.create(
+        model="deepseek/deepseek-chat-v3-0324:free",
+        messages=[{"role": "user", "content": text}],
+    )
+    return completion.choices[0].message.content
 
 def parse_message(message):
     if "message" not in message or "text" not in message["message"]:
@@ -66,14 +63,13 @@ async def tel_send_message(chat_id, text):
             ]
         }
     }
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()  # Поднимает исключение для ошибок HTTP
-    except httpx.HTTPStatusError as e:
-        print(f"Ошибка отправки сообщения: {e.response.text}")
-    except Exception as e:
-        print(f"Ошибка при отправке сообщения: {e}")
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json=payload)
+
+    if response.status_code != 200:
+        print("Ошибка отправки сообщения:", response.text)
+
+    return response
 
 async def tel_send_message_not_markup(chat_id, text):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -81,27 +77,23 @@ async def tel_send_message_not_markup(chat_id, text):
         "chat_id": chat_id,
         "text": text,
     }
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()  # Поднимает исключение для ошибок HTTP
-    except httpx.HTTPStatusError as e:
-        print(f"Ошибка отправки сообщения: {e.response.text}")
-    except Exception as e:
-        print(f"Ошибка при отправке сообщения: {e}")
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json=payload)
+
+    if response.status_code != 200:
+        print("Ошибка отправки сообщения:", response.text)
+
+    return response
 
 async def delete_message(chat_id, message_id):
     url = f"https://api.telegram.org/bot{TOKEN}/deleteMessage?chat_id={chat_id}&message_id={message_id}"
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url)
-            response.raise_for_status()  # Поднимает исключение для ошибок HTTP
-    except httpx.HTTPStatusError as e:
-        print(f"Ошибка удаления сообщения: {e.response.text}")
-    except Exception as e:
-        print(f"Ошибка при удалении сообщения: {e}")
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url)
+    if response.status_code != 200:
+        print("Ошибка удаления сообщения:", response.text)    
 
 user_states = {}
+user_locks = {}
 
 @app.post('/webhook')
 async def webhook(request: Request):
@@ -127,22 +119,23 @@ async def webhook(request: Request):
     if chat_id is None or txt is None:
         return JSONResponse(content={"status": "ignored"}, status_code=200)
 
-    if chat_id in user_states and user_states[chat_id] == "awaiting_response":
-        await tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}")
-        neural_response = await generate_response(txt)  
-        
-        for part in split_text(neural_response):
-            await tel_send_message_not_markup(chat_id, part)
+    async with user_locks.setdefault(chat_id, asyncio.Lock()):
+        if chat_id in user_states and user_states[chat_id] == "awaiting_response":
+            await tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}")
+            neural_response = await generate_response(txt)  
+            
+            for part in split_text(neural_response):
+                await tel_send_message_not_markup(chat_id, part)
 
-        user_states[chat_id] = None  
-    elif txt.lower() == "/start":
-        await tel_send_message(chat_id, 
-            "🎵 Добро пожаловать в наш уникальный музыкальный мир! "
-            "Здесь вас ждут любимые треки и вдохновляющие клипы. 🎶\n\n"
-            "✨ Мечтаете о персональной композиции? "
-            "Закажите эксклюзивное музыкальное произведение, созданное специально для вас! 🎼\n\n"
-            "🤖 Используйте возможности искусственного интеллекта для творческих запросов и новых идей. 🚀"
-        )
+            user_states[chat_id] = None  
+        elif txt.lower() == "/start":
+            await tel_send_message(chat_id, 
+                "🎵 Добро пожаловать в наш уникальный музыкальный мир! "
+                "Здесь вас ждут любимые треки и вдохновляющие клипы. 🎶\n\n"
+                "✨ Мечтаете о персональной композиции? "
+                "Закажите эксклюзивное музыкальное произведение, созданное специально для вас! 🎼\n\n"
+                "🤖 Используйте возможности искусственного интеллекта для творческих запросов и новых идей. 🚀"
+            )
 
     return JSONResponse(content={"status": "ok"}, status_code=200)
 
@@ -153,3 +146,4 @@ async def index():
 if __name__ == '__main__':
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 5000)), log_level="info")
+
