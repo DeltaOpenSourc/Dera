@@ -87,13 +87,7 @@ async def tel_send_message_not_markup(chat_id, text):
         print("Ошибка отправки сообщения:", response.text)
 
     return response
-
-async def delete_message(chat_id, message_id):
-    url = f"https://api.telegram.org/bot{TOKEN}/deleteMessage?chat_id={chat_id}&message_id={message_id}"
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url)
-    if response.status_code != 200:
-        print("Ошибка удаления сообщения:", response.text)    
+ 
 
 user_states = {}
 
@@ -105,10 +99,7 @@ async def webhook(request: Request):
     if "callback_query" in msg:
         callback = msg["callback_query"]
         chat_id = callback["message"]["chat"]["id"]
-        message_id = callback["message"]["message_id"]
         callback_data = callback["data"]
-
-        await delete_message(chat_id, message_id)
 
         if callback_data == "deepSeek":
             await tel_send_message_not_markup(chat_id, "Вы выбрали диалог с ИИ. Как я могу помочь вам?")
@@ -122,7 +113,7 @@ async def webhook(request: Request):
         return JSONResponse(content={"status": "ignored"}, status_code=200)
 
     if chat_id in user_states and user_states[chat_id] == "awaiting_response":
-        await tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}")
+        await tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}, отправьте /start если долгая обработка, возможно ответ отправиться")
         
         try:
             neural_response = await generate_response(txt)  
@@ -152,3 +143,4 @@ async def index():
 if __name__ == '__main__':
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 5000)), log_level="info")
+
