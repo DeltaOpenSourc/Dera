@@ -2,15 +2,14 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, Update
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import aiosqlite
 import aiohttp
-from dotenv import load_dotenv
+from aiohttp import web
 import os
-load_dotenv()  
-TOKEN = os.getenv('TOKEN') 
 
+TOKEN = '8283069945:AAGE67y1hIfmClH2Vtf6rLKRkzDMUiwqRIE'
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -26,7 +25,6 @@ async def CreateDB():
     async with aiosqlite.connect("services.db") as db:
         await db.execute(query)
         await db.commit()
-
 
 async def get_cards():
     async with aiosqlite.connect("services.db") as db:
@@ -74,7 +72,6 @@ class Form(StatesGroup):
 
     admin_waiting_for_country_name = State()
     admin_waiting_for_country_conditions = State()
-
 
 MAIN_MENU_BUTTONS = [
     ("Оформить карту", "menu_card"),
@@ -128,8 +125,6 @@ def main_card_keyboard():
     kb_builder.adjust(1)
     return kb_builder.as_markup()
 
-
-
 @dp.message(CommandStart())
 async def start(message: Message, state: FSMContext):
     kb = main_menu_keyboard()
@@ -137,7 +132,6 @@ async def start(message: Message, state: FSMContext):
     await message.answer(
         "👋 Приветствуем в PaySecure — вашем личном помощнике в мире финансов.\n\n Здесь вы можете:\n💱 Переводить деньги между странами\n  💳 Получать карты для оплаты\n  📄 Оплачивать инвойсы в любых валютах Быстро\n\n Надёжно. Без лишних вопросов.  \n\nВыберите нужную функцию ниже 👇",
         reply_markup=kb,
-        
     )
     await state.clear()
 
@@ -153,6 +147,7 @@ async def admin_add_card(message: Message):
         "Выберите действие:",
         reply_markup=main_admin_keyboard()
     )
+
 @dp.callback_query(F.data.startswith("st_"))
 async def process_admin_callback(call: CallbackQuery, state: FSMContext):
     action = call.data[len("st_"):]
@@ -162,20 +157,19 @@ async def process_admin_callback(call: CallbackQuery, state: FSMContext):
         await state.set_state(Form.admin_waiting_for_country_name)
 
     elif action == "delete":
-         cards = await get_cards()
-         if not cards:
+        cards = await get_cards()
+        if not cards:
             await call.message.answer("Нет стран для удаления.")
             await call.answer()
             return
 
-         kb_builder = InlineKeyboardBuilder()
-         for card_id, card_name in cards:
-             kb_builder.button(text=card_name, callback_data=f"admin_delete_{card_id}")
-         kb_builder.adjust(1)
-         await call.message.answer("Выберите страну для удаления:", reply_markup=kb_builder.as_markup())
+        kb_builder = InlineKeyboardBuilder()
+        for card_id, card_name in cards:
+            kb_builder.button(text=card_name, callback_data=f"admin_delete_{card_id}")
+        kb_builder.adjust(1)
+        await call.message.answer("Выберите страну для удаления:", reply_markup=kb_builder.as_markup())
 
     await call.answer()
-
 
 @dp.callback_query(F.data.startswith("admin_delete_"))
 async def admin_delete_card_callback(call: CallbackQuery):
@@ -193,7 +187,6 @@ async def admin_delete_card_callback(call: CallbackQuery):
 
     await call.message.edit_text(f"Страна-карта '{card_name}' успешно удалена.")
     await call.answer()
-
 
 @dp.message(Form.admin_waiting_for_country_name)
 async def admin_country_name_entered(message: Message, state: FSMContext):
@@ -268,8 +261,6 @@ async def process_strana_callback(call: CallbackQuery, state: FSMContext):
     await call.message.answer(f"Условия карты: {card_name_one}", reply_markup=heart)
     await call.answer()
 
-
-
 @dp.callback_query(F.data.startswith("zayvka"))
 async def process_strana_callback(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
@@ -300,7 +291,6 @@ async def manager_sv(message: Message, state: FSMContext):
             else:
                 await message.answer("Ошибка при отправке заявки на партнерство.")
     
-
 @dp.message(Form.strana_name)
 async def strana_telegram(message: Message, state: FSMContext):
     await state.update_data(selected_name=message.text)
@@ -371,7 +361,6 @@ async def process_service_choice(call: CallbackQuery, state: FSMContext):
 
     data = await state.get_data()
     country = data.get("selected_country", "не выбрана")
-
 
     await call.message.answer(f"Выбранная страна: {country}\nВведите ваше имя и фамилию:")
     await state.set_state(Form.waiting_for_name)
@@ -478,7 +467,7 @@ async def process_invoice_strana(message: Message, state: FSMContext):
 @dp.message(Form.invoice_summa)
 async def process_invoice_summa(message: Message, state: FSMContext):
     await state.update_data(summa=message.text)
-    await message.answer("4. Введите инвойс:")
+    await message.answer("4. Введите инвойс (можно отправить фотографию):")
     await state.set_state(Form.invoice_screen)
 
 @dp.message(Form.invoice_screen)
@@ -513,13 +502,24 @@ async def process_invoice_comm(message: Message, state: FSMContext):
 
     async with aiohttp.ClientSession() as session:
         async with session.post("https://nexthe-beta.vercel.app/api/invoice", json=payload) as resp:
-              await message.answer("Инвойс успешно отправлен!")
+            if resp.status == 200:
+                await message.answer("Инвойс успешно отправлен!")
+            else:
+                await message.answer("Ошибка при отправке инвойса.")
 
 @dp.callback_query(F.data == "zayvka")
 async def zayvka(call: CallbackQuery, state: FSMContext):
     await call.message.answer("Форма заявки")
     await call.answer()
 
+async def webhook(request):
+    update = Update.to_object(await request.json())
+    await dp.process_update(update)
+    return web.Response()
+
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(dp.start_polling(bot))
+    app = web.Application()
+    app.router.add_post('/webhook', webhook)
+    web.run_app(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+
+
