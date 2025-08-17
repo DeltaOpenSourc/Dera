@@ -98,7 +98,9 @@ def webhook():
 
         if callback_data == "deepSeek":
             tel_send_message_not_markup(chat_id, "Вы выбрали диалог с ИИ. Как я могу помочь вам?")
-            return jsonify({"status": "message_sent"}), 200
+            chat_id, txt = parse_message(msg)
+            tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}")
+            
         
 
         return jsonify({"status": "deleted"}), 200
@@ -109,8 +111,6 @@ def webhook():
     chat_id, txt = parse_message(msg)
     if chat_id is None or txt is None:
         return jsonify({"status": "ignored"}), 200
-    
-    tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}")
 
     if txt.lower() == "/start":
         tel_send_message(chat_id, 
@@ -130,4 +130,3 @@ def index():
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
-
