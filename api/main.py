@@ -1,14 +1,29 @@
 import os
 import requests
 from flask import Flask, Response, request, jsonify
+from openai import OpenAI
 
-# Получаем токен из переменных окружения
+
 TOKEN = os.getenv('TOKEN')
+TOKEN_DEEP_SEEK = os.getenv('TOKEN_DEEP_SEEK')
+
 
 if not TOKEN:
     raise ValueError("Bot token is not set in environment variables!")
 
 app = Flask(__name__)
+
+client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=TOKEN_DEEP_SEEK,
+)
+
+async def a_generate(text: str):
+    completion = await client.chat.completions.create(
+        model="deepseek/deepseek-r1-0528:free",
+        messages=[{"role": "user", "content": text}],
+    )
+    return completion.choices[0].message.content
 
 def parse_message(message):
     if "message" not in message or "text" not in message["message"]:
@@ -114,6 +129,8 @@ def webhook():
     
     if chat_id in user_states and user_states[chat_id] == "awaiting_response":
         tel_send_message(chat_id, f"Обрабатываю ваш запрос: {txt}")
+        neural_response = a_generate(txt)
+        tel_send_message(chat_id, neural_response)
         user_states[chat_id] = None 
     else:
         pass
