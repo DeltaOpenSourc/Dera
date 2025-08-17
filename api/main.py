@@ -113,17 +113,13 @@ async def webhook(request: Request):
         return JSONResponse(content={"status": "ignored"}, status_code=200)
 
     if chat_id in user_states and user_states[chat_id] == "awaiting_response":
-        await tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}, отправьте /start если долгая обработка, возможно ответ отправиться")
-        
-        try:
-            neural_response = await generate_response(txt)  
-            for part in split_text(neural_response):
-                await tel_send_message_not_markup(chat_id, part)
-        except Exception as e:
-            print("Ошибка при обработке запроса:", e)
-            await tel_send_message_not_markup(chat_id, "Произошла ошибка при обработке вашего запроса.")
-        finally:
-            user_states[chat_id] = None 
+        completion = await client.chat.completions.create(
+            model="deepseek/deepseek-r1-0528:free",
+            messages=[{"role": "user", "content": txt}],
+        )
+        for part in split_text(completion.choices[0].message.content):
+           await tel_send_message_not_markup(chat_id, part)
+        user_states[chat_id] = None 
 
     elif txt.lower() == "/start":
         await tel_send_message(chat_id, 
