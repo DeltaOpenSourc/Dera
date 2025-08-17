@@ -2,7 +2,7 @@ import os
 import requests
 from flask import Flask, Response, request, jsonify
 
-
+# Получаем токен из переменных окружения
 TOKEN = os.getenv('TOKEN')
 
 if not TOKEN:
@@ -64,6 +64,22 @@ def tel_send_message(chat_id, text):
 
     return response
 
+
+
+def tel_send_message_not_markup(chat_id, text):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+    }
+    response = requests.post(url, json=payload)
+
+    if response.status_code != 200:
+        print("Ошибка отправки сообщения:", response.text)
+
+    return response
+
+
 def delete_message(chat_id, message_id):
     """ Удаление сообщения с кнопками """
  
@@ -89,7 +105,7 @@ def webhook():
         delete_message(chat_id, message_id)
 
         if callback_data == "deepSeek":
-            tel_send_message(chat_id, "Вы выбрали диалог с ИИ. Как я могу помочь вам?")
+            tel_send_message_not_markup(chat_id, "Вы выбрали диалог с ИИ. Как я могу помочь вам?")
             return jsonify({"status": "message_sent"}), 200
         
 
@@ -118,4 +134,3 @@ def index():
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
-
