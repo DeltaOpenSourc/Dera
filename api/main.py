@@ -16,6 +16,12 @@ client = OpenAI(
     api_key=TOKEN_DEEP_SEEK,
 )
 
+MAX_MESSAGE_LENGTH = 4096 
+
+def split_text(text, max_length=MAX_MESSAGE_LENGTH):
+    return [text[i:i + max_length] for i in range(0, len(text), max_length)]
+
+
 def generate_response(text: str):
     completion = client.chat.completions.create(
         model="deepseek/deepseek-r1-0528:free",
@@ -109,8 +115,11 @@ def webhook():
     
     if chat_id in user_states and user_states[chat_id] == "awaiting_response":
         tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}")
-        neural_response = generate_response(txt)  
-        tel_send_message_not_markup(chat_id, neural_response)
+        neural_response = generate_response(txt) 
+        
+        for part in split_text(neural_response):
+            tel_send_message_not_markup(chat_id, part)
+
         user_states[chat_id] = None  
     elif txt.lower() == "/start":
         tel_send_message(chat_id, 
@@ -129,3 +138,4 @@ def index():
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
