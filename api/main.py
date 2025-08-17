@@ -1,6 +1,6 @@
 import os
 import requests
-from flask import Flask, Response, request, jsonify
+from quart import Quart, Response, request, jsonify
 from openai import OpenAI
 
 TOKEN = os.getenv('TOKEN')
@@ -9,7 +9,7 @@ TOKEN_DEEP_SEEK = os.getenv('TOKEN_DEEP_SEEK')
 if not TOKEN:
     raise ValueError("Bot token is not set in environment variables!")
 
-app = Flask(__name__)
+app = Quart(__name__)
 
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
@@ -21,9 +21,8 @@ MAX_MESSAGE_LENGTH = 4096
 def split_text(text, max_length=MAX_MESSAGE_LENGTH):
     return [text[i:i + max_length] for i in range(0, len(text), max_length)]
 
-
-def generate_response(text: str):
-    completion = client.chat.completions.create(
+async def generate_response(text: str):
+    completion = await client.chat.completions.create(
         model="deepseek/deepseek-r1-0528:free",
         messages=[{"role": "user", "content": text}],
     )
@@ -38,7 +37,7 @@ def parse_message(message):
     return chat_id, txt
 
 @app.route('/setwebhook', methods=['POST', 'GET'])
-def setwebhook():
+async def setwebhook():
     webhook_url = f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={os.environ.get('VERCEL_URL')}/webhook&allowed_updates=%5B%22message%22,%22callback_query%22%5D"
     response = requests.get(webhook_url)
     
@@ -47,7 +46,7 @@ def setwebhook():
     else:
         return f"Error setting webhook: {response.text}", response.status_code
 
-def tel_send_message(chat_id, text):
+async def tel_send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {
         "chat_id": chat_id,
@@ -61,37 +60,37 @@ def tel_send_message(chat_id, text):
             ]
         }
     }
-    response = requests.post(url, json=payload)
+    response = await requests.post(url, json=payload)
 
     if response.status_code != 200:
         print("Ошибка отправки сообщения:", response.text)
 
     return response
 
-def tel_send_message_not_markup(chat_id, text):
+async def tel_send_message_not_markup(chat_id, text):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {
         "chat_id": chat_id,
         "text": text,
     }
-    response = requests.post(url, json=payload)
+    response = await requests.post(url, json=payload)
 
     if response.status_code != 200:
         print("Ошибка отправки сообщения:", response.text)
 
     return response
 
-def delete_message(chat_id, message_id):
+async def delete_message(chat_id, message_id):
     url = f"https://api.telegram.org/bot{TOKEN}/deleteMessage?chat_id={chat_id}&message_id={message_id}"
-    response = requests.post(url)
+    response = await requests.post(url)
     if response.status_code != 200:
         print("Ошибка удаления сообщения:", response.text)    
 
 user_states = {}
 
 @app.route('/webhook', methods=['POST'])
-def webhook():
-    msg = request.get_json()
+async def webhook():
+    msg = await request.get_json()
     print("Получен вебхук:", msg)
 
     if "callback_query" in msg:
@@ -100,10 +99,10 @@ def webhook():
         message_id = callback["message"]["message_id"]
         callback_data = callback["data"]
 
-        delete_message(chat_id, message_id)
+        await delete_message(chat_id, message_id)
 
         if callback_data == "deepSeek":
-            tel_send_message_not_markup(chat_id, "Вы выбрали диалог с ИИ. Как я могу помочь вам?")
+            await tel_send_message_not_markup(chat_id, "Вы выбрали диалог с ИИ. Как я могу помочь вам?")
             user_states[chat_id] = 'awaiting_response'
             return jsonify({"status": "message_sent"}), 200
         
@@ -114,15 +113,15 @@ def webhook():
         return jsonify({"status": "ignored"}), 200
     
     if chat_id in user_states and user_states[chat_id] == "awaiting_response":
-        tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}")
-        neural_response = generate_response(txt) 
+        await tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}")
+        neural_response = await generate_response(txt) 
         
         for part in split_text(neural_response):
-            tel_send_message_not_markup(chat_id, part)
+            await tel_send_message_not_markup(chat_id, part)
 
         user_states[chat_id] = None  
     elif txt.lower() == "/start":
-        tel_send_message(chat_id, 
+        await tel_send_message(chat_id, 
             "🎵 Добро пожаловать в наш уникальный музыкальный мир! "
             "Здесь вас ждут любимые треки и вдохновляющие клипы. 🎶\n\n"
             "✨ Мечтаете о персональной композиции? "
@@ -133,9 +132,8 @@ def webhook():
     return Response('ok', status=200)
 
 @app.route("/", methods=['GET'])
-def index():
+async def index():
     return "<h1>Telegram Bot Webhook is Running</h1>"
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
-
