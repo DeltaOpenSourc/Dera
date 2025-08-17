@@ -38,17 +38,24 @@ def setwebhook():
 
 
 def tel_send_message(chat_id, text):
-    """ Отправка сообщения в Telegram """
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {
         "chat_id": chat_id,
         "text": text,
         "reply_markup": {
-            "inline_keyboard": [
-                [{"text": "Підтвредити", "callback_data": "confirm"},
-                {"text": "Скасувати", "callback_data": "cancel"}]
-            ]
-        }
+    "inline_keyboard": [
+        [
+            {
+                "text": "Открыть Муз Чат", 
+                "web_app": {"url": "https://getstarthealth.github.io/Obmen/"}
+            },
+            {
+                "text": "Диалог с ИИ", 
+                "callback_data": "deepSeek"
+            }
+        ]
+    ]
+}
     }
     response = requests.post(url, json=payload)
 
@@ -66,6 +73,7 @@ def delete_message(chat_id, message_id):
     if response.status_code != 200:
         print("Ошибка удаления сообщения:", response.text)    
 
+
 @app.route('/webhook', methods=['POST'])
 def webhook():
     """ Обработка входящих сообщений от Telegram API """
@@ -80,17 +88,21 @@ def webhook():
         delete_message(chat_id, message_id)
 
         return jsonify({"status": "deleted"}), 200
+    
 
     chat_id, txt = parse_message(msg)
     if chat_id is None or txt is None:
         return jsonify({"status": "ignored"}), 200
 
     if txt.lower() == "/start":
-        tel_send_message(chat_id, "Привет!")
-    elif txt.lower() == "hi":
-        tel_send_message(chat_id, "Кнопка!!")
-    else:
-        tel_send_message(chat_id, "Авторизація")
+        tel_send_message(chat_id, 
+            "🎵 Добро пожаловать в наш уникальный музыкальный мир! "
+            "Здесь вас ждут любимые треки и вдохновляющие клипы. 🎶\n\n"
+            "✨ Мечтаете о персональной композиции? "
+            "Закажите эксклюзивное музыкальное произведение, созданное специально для вас! 🎼\n\n"
+            "🤖 Используйте возможности искусственного интеллекта для творческих запросов и новых идей. 🚀"
+        ),
+        
 
     return Response('ok', status=200)
 
