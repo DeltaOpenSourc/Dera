@@ -2,6 +2,7 @@ import os
 import requests
 from flask import Flask, Response, request, jsonify
 
+# Получаем токен из переменных окружения
 TOKEN = os.getenv('TOKEN')
 
 if not TOKEN:
@@ -98,7 +99,7 @@ def webhook():
 
         if callback_data == "deepSeek":
             tel_send_message_not_markup(chat_id, "Вы выбрали диалог с ИИ. Как я могу помочь вам?")
-            user_states[chat_id] = 'awating_response'
+            user_states[chat_id] = 'awaiting_response'
             return jsonify({"status": "message_sent"}), 200
         
 
