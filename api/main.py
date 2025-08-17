@@ -39,15 +39,9 @@ async def parse_message(message):
     return chat_id, txt
 
 @app.route('/setwebhook', methods=['POST', 'GET'])
-async def setwebhook():
+def setwebhook():
     webhook_url = f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={os.environ.get('VERCEL_URL')}/webhook&allowed_updates=%5B%22message%22,%22callback_query%22%5D"
-    async with httpx.AsyncClient() as client:
-        response = await client.get(webhook_url)
-
-    if response.status_code == 200:
-        return "Webhook successfully set", 200
-    else:
-        return f"Error setting webhook: {response.text}", response.status_code
+    response = requests.get(webhook_url)
 
 async def tel_send_message(chat_id, text, reply_markup=None):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
