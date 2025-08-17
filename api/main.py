@@ -1,8 +1,7 @@
 import os
 import requests
 from flask import Flask, Response, request, jsonify
-from openai import OpenAI, AsyncOpenAI
-import httpx
+from openai import OpenAI
 
 TOKEN = os.getenv('TOKEN')
 TOKEN_DEEP_SEEK = os.getenv('TOKEN_DEEP_SEEK')
@@ -12,25 +11,25 @@ if not TOKEN:
 
 app = Flask(__name__)
 
-client = AsyncOpenAI(
+client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=TOKEN_DEEP_SEEK,
 )
 
 MAX_MESSAGE_LENGTH = 4096 
 
-async def split_text(text, max_length=MAX_MESSAGE_LENGTH):
+def split_text(text, max_length=MAX_MESSAGE_LENGTH):
     return [text[i:i + max_length] for i in range(0, len(text), max_length)]
 
 
-async def generate_response(text: str):
-    completion = await client.chat.completions.create(
-        model="deepseek/deepseek-chat-v3-0324:free",
+def generate_response(text: str):
+    completion = client.chat.completions.create(
+        model="deepseek/deepseek-r1-0528:free",
         messages=[{"role": "user", "content": text}],
     )
     return completion.choices[0].message.content
 
-async def parse_message(message):
+def parse_message(message):
     if "message" not in message or "text" not in message["message"]:
         return None, None  
 
@@ -43,32 +42,55 @@ def setwebhook():
     webhook_url = f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={os.environ.get('VERCEL_URL')}/webhook&allowed_updates=%5B%22message%22,%22callback_query%22%5D"
     response = requests.get(webhook_url)
 
-async def tel_send_message(chat_id, text, reply_markup=None):
+    if response.status_code == 200:
+        return "Webhook successfully set", 200
+    else:
+        return f"Error setting webhook: {response.text}", response.status_code
+
+def tel_send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {
         "chat_id": chat_id,
         "text": text,
-        "reply_markup": reply_markup
+        "reply_markup": {
+            "inline_keyboard": [
+                [
+                    {"text": "Открыть Муз Чат", "web_app": {"url": "https://getstarthealth.github.io/Obmen/"}},
+                    {"text": "Диалог с ИИ", "callback_data": "deepSeek"}
+                ]
+            ]
+        }
     }
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url, json=payload)
-        if response.status_code != 200:
-            print("Ошибка отправки сообщения:", response.text)
+    response = requests.post(url, json=payload)
 
-async def tel_send_message_not_markup(chat_id, text):
-    await tel_send_message(chat_id, text)
+    if response.status_code != 200:
+        print("Ошибка отправки сообщения:", response.text)
 
-async def delete_message(chat_id, message_id):
+    return response
+
+def tel_send_message_not_markup(chat_id, text):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+    }
+    response = requests.post(url, json=payload)
+
+    if response.status_code != 200:
+        print("Ошибка отправки сообщения:", response.text)
+
+    return response
+
+def delete_message(chat_id, message_id):
     url = f"https://api.telegram.org/bot{TOKEN}/deleteMessage?chat_id={chat_id}&message_id={message_id}"
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url)
-        if response.status_code != 200:
-            print("Ошибка удаления сообщения:", response.text)    
+    response = requests.post(url)
+    if response.status_code != 200:
+        print("Ошибка удаления сообщения:", response.text)    
 
 user_states = {}
 
 @app.route('/webhook', methods=['POST'])
-async def webhook():
+def webhook():
     msg = request.get_json()
     print("Получен вебхук:", msg)
 
@@ -78,29 +100,29 @@ async def webhook():
         message_id = callback["message"]["message_id"]
         callback_data = callback["data"]
 
-        await delete_message(chat_id, message_id)
+        delete_message(chat_id, message_id)
 
         if callback_data == "deepSeek":
-            await tel_send_message_not_markup(chat_id, "Вы выбрали диалог с ИИ. Как я могу помочь вам?")
+            tel_send_message_not_markup(chat_id, "Вы выбрали диалог с ИИ. Как я могу помочь вам?")
             user_states[chat_id] = 'awaiting_response'
             return jsonify({"status": "message_sent"}), 200
 
         return jsonify({"status": "deleted"}), 200
 
-    chat_id, txt = await parse_message(msg)
+    chat_id, txt = parse_message(msg)
     if chat_id is None or txt is None:
         return jsonify({"status": "ignored"}), 200
 
     if chat_id in user_states and user_states[chat_id] == "awaiting_response":
-        await tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}")
-        neural_response = await generate_response(txt)  
-
-        for part in await split_text(neural_response):
-            await tel_send_message_not_markup(chat_id, part)
+        tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}")
+        neural_response = generate_response(txt)  
+        
+        for part in split_text(neural_response):
+            tel_send_message_not_markup(chat_id, part)
 
         user_states[chat_id] = None  
     elif txt.lower() == "/start":
-        await tel_send_message(chat_id, 
+        tel_send_message(chat_id, 
             "🎵 Добро пожаловать в наш уникальный музыкальный мир! "
             "Здесь вас ждут любимые треки и вдохновляющие клипы. 🎶\n\n"
             "✨ Мечтаете о персональной композиции? "
