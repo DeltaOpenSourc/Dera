@@ -1,7 +1,7 @@
 import os
 import requests
 from flask import Flask, Response, request, jsonify
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 
 TOKEN = os.getenv('TOKEN')
 TOKEN_DEEP_SEEK = os.getenv('TOKEN_DEEP_SEEK')
@@ -11,7 +11,7 @@ if not TOKEN:
 
 app = Flask(__name__)
 
-client = OpenAI(
+client = AsyncOpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=TOKEN_DEEP_SEEK,
 )
@@ -22,9 +22,9 @@ def split_text(text, max_length=MAX_MESSAGE_LENGTH):
     return [text[i:i + max_length] for i in range(0, len(text), max_length)]
 
 
-def generate_response(text: str):
-    completion = client.chat.completions.create(
-        model="deepseek/deepseek-r1-0528:free",
+async def generate_response(text: str):
+    completion = await client.chat.completions.create(
+        model="deepseek/deepseek-chat-v3-0324:free",
         messages=[{"role": "user", "content": text}],
     )
     return completion.choices[0].message.content
@@ -90,7 +90,7 @@ def delete_message(chat_id, message_id):
 user_states = {}
 
 @app.route('/webhook', methods=['POST'])
-def webhook():
+async def webhook():
     msg = request.get_json()
     print("Получен вебхук:", msg)
 
@@ -115,7 +115,7 @@ def webhook():
 
     if chat_id in user_states and user_states[chat_id] == "awaiting_response":
         tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}")
-        neural_response = generate_response(txt)  
+        neural_response = await generate_response(txt)  
         
         for part in split_text(neural_response):
             tel_send_message_not_markup(chat_id, part)
