@@ -86,7 +86,7 @@ def delete_message(chat_id, message_id):
 @app.route('/webhook', methods=['POST'])
 def webhook():
     msg = request.get_json()
-
+    print("Получен вебхук:", msg)
     if "callback_query" in msg:
         callback = msg["callback_query"]
         chat_id = callback["message"]["chat"]["id"]
@@ -98,9 +98,7 @@ def webhook():
 
         if callback_data == "deepSeek":
             tel_send_message_not_markup(chat_id, "Вы выбрали диалог с ИИ. Как я могу помочь вам?")
-            chat_id, txt = parse_message(msg)
-            tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}")
-            
+            return jsonify({"status": "message_sent"}), 200
         
 
         return jsonify({"status": "deleted"}), 200
@@ -111,6 +109,8 @@ def webhook():
     chat_id, txt = parse_message(msg)
     if chat_id is None or txt is None:
         return jsonify({"status": "ignored"}), 200
+    
+    tel_send_message(chat_id, f"Обрабатываю ваш запрос: {txt}")
 
     if txt.lower() == "/start":
         tel_send_message(chat_id, 
