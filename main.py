@@ -60,7 +60,7 @@ def tel_send_message(chat_id, text):
 def delete_message(chat_id, message_id):
     """ Удаление сообщения с кнопками """
  
-    url = f"https://api.telegram.org/bot6402853514:AAHM-zoo59uIa4Yfdi4cfFXTmXvX_XnSvLA/deleteMessage?chat_id={chat_id}&message_id={message_id}"
+    url = f"https://api.telegram.org/bot{TOKEN}/deleteMessage?chat_id={chat_id}&message_id={message_id}"
     response = requests.post(url)
     print(f"Удаление сообщения {message_id}: {response.status_code}, {response.text}") 
     if response.status_code != 200:
@@ -76,7 +76,7 @@ def webhook():
         chat_id = callback["message"]["chat"]["id"]
         message_id = callback["message"]["message_id"]
         print(f"Нажата кнопка. Удаляю сообщение {message_id} из чата {chat_id}")
-        # Удаляем сообщение
+
         delete_message(chat_id, message_id)
 
         return jsonify({"status": "deleted"}), 200
@@ -85,7 +85,9 @@ def webhook():
     if chat_id is None or txt is None:
         return jsonify({"status": "ignored"}), 200
 
-    if txt.lower() == "hi":
+    if txt.lower() == "/start":
+        tel_send_message(chat_id, "Привет!")
+    elif txt.lower() == "hi":
         tel_send_message(chat_id, "Кнопка!!")
     else:
         tel_send_message(chat_id, "Авторизація")
