@@ -82,6 +82,7 @@ def delete_message(chat_id, message_id):
     if response.status_code != 200:
         print("Ошибка удаления сообщения:", response.text)    
 
+user_states = {}
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -98,6 +99,7 @@ def webhook():
 
         if callback_data == "deepSeek":
             tel_send_message_not_markup(chat_id, "Вы выбрали диалог с ИИ. Как я могу помочь вам?")
+            user_states[chat_id] = 'awating'
             return jsonify({"status": "message_sent"}), 200
         
 
@@ -110,7 +112,11 @@ def webhook():
     if chat_id is None or txt is None:
         return jsonify({"status": "ignored"}), 200
     
-    tel_send_message(chat_id, f"Обрабатываю ваш запрос: {txt}")
+    if chat_id in user_states and user_states[chat_id] == "awaiting_response":
+        tel_send_message(chat_id, f"Обрабатываю ваш запрос: {txt}")
+        user_states[chat_id] = None 
+    else:
+        pass
 
     if txt.lower() == "/start":
         tel_send_message(chat_id, 
