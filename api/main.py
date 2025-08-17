@@ -23,11 +23,15 @@ def split_text(text, max_length=MAX_MESSAGE_LENGTH):
     return [text[i:i + max_length] for i in range(0, len(text), max_length)]
 
 async def generate_response(text: str):
-    completion = await client.chat.completions.create(
-        model="deepseek/deepseek-chat-v3-0324:free",
-        messages=[{"role": "user", "content": text}],
-    )
-    return completion.choices[0].message.content
+    try:
+        completion = await client.chat.completions.create(
+            model="deepseek/deepseek-r1-0528:free",
+            messages=[{"role": "user", "content": text}],
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        print("Ошибка при генерации ответа:", e)
+        return "Произошла ошибка при обработке вашего запроса."
 
 def parse_message(message):
     if "message" not in message or "text" not in message["message"]:
@@ -119,12 +123,17 @@ async def webhook(request: Request):
 
     if chat_id in user_states and user_states[chat_id] == "awaiting_response":
         await tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}")
-        neural_response = await generate_response(txt)  
         
-        for part in split_text(neural_response):
-            await tel_send_message_not_markup(chat_id, part)
+        try:
+            neural_response = await generate_response(txt)  
+            for part in split_text(neural_response):
+                await tel_send_message_not_markup(chat_id, part)
+        except Exception as e:
+            print("Ошибка при обработке запроса:", e)
+            await tel_send_message_not_markup(chat_id, "Произошла ошибка при обработке вашего запроса.")
+        finally:
+            user_states[chat_id] = None 
 
-        user_states[chat_id] = None  
     elif txt.lower() == "/start":
         await tel_send_message(chat_id, 
             "🎵 Добро пожаловать в наш уникальный музыкальный мир! "
