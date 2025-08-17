@@ -11,18 +11,11 @@ if not TOKEN:
 app = Flask(__name__)
 
 def parse_message(message):
-    """ Парсим сообщение от Telegram API """
-    print("message -->", message)
-
     if "message" not in message or "text" not in message["message"]:
         return None, None  
 
     chat_id = message["message"]["chat"]["id"]
     txt = message["message"]["text"]
-
-    print("chat_id -->", chat_id)
-    print("txt -->", txt)
-
     return chat_id, txt
 
 @app.route('/setwebhook', methods=['POST','GET'])
@@ -92,9 +85,8 @@ def delete_message(chat_id, message_id):
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    """ Обработка входящих сообщений от Telegram API """
     msg = request.get_json()
-    print("Получен вебхук:", msg)
+
     if "callback_query" in msg:
         callback = msg["callback_query"]
         chat_id = callback["message"]["chat"]["id"]
@@ -111,10 +103,14 @@ def webhook():
 
         return jsonify({"status": "deleted"}), 200
     
+       
+    
 
     chat_id, txt = parse_message(msg)
     if chat_id is None or txt is None:
         return jsonify({"status": "ignored"}), 200
+    
+    tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}")
 
     if txt.lower() == "/start":
         tel_send_message(chat_id, 
@@ -134,3 +130,4 @@ def index():
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
