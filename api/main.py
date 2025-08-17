@@ -23,11 +23,15 @@ def split_text(text, max_length=MAX_MESSAGE_LENGTH):
     return [text[i:i + max_length] for i in range(0, len(text), max_length)]
 
 async def generate_response(text: str):
-    completion = await client.chat.completions.create(
-        model="deepseek/deepseek-chat-v3-0324:free",
-        messages=[{"role": "user", "content": text}],
-    )
-    return completion.choices[0].message.content
+    try:
+        completion = await client.chat.completions.create(
+            model="deepseek/deepseek-chat-v3-0324:free",
+            messages=[{"role": "user", "content": text}],
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        print(f"Ошибка при генерации ответа: {e}")
+        return "Извините, произошла ошибка при обработке вашего запроса."
 
 def parse_message(message):
     if "message" not in message or "text" not in message["message"]:
@@ -62,13 +66,14 @@ async def tel_send_message(chat_id, text):
             ]
         }
     }
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url, json=payload)
-
-    if response.status_code != 200:
-        print("Ошибка отправки сообщения:", response.text)
-
-    return response
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload)
+            response.raise_for_status()  # Поднимает исключение для ошибок HTTP
+    except httpx.HTTPStatusError as e:
+        print(f"Ошибка отправки сообщения: {e.response.text}")
+    except Exception as e:
+        print(f"Ошибка при отправке сообщения: {e}")
 
 async def tel_send_message_not_markup(chat_id, text):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -76,20 +81,25 @@ async def tel_send_message_not_markup(chat_id, text):
         "chat_id": chat_id,
         "text": text,
     }
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url, json=payload)
-
-    if response.status_code != 200:
-        print("Ошибка отправки сообщения:", response.text)
-
-    return response
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload)
+            response.raise_for_status()  # Поднимает исключение для ошибок HTTP
+    except httpx.HTTPStatusError as e:
+        print(f"Ошибка отправки сообщения: {e.response.text}")
+    except Exception as e:
+        print(f"Ошибка при отправке сообщения: {e}")
 
 async def delete_message(chat_id, message_id):
     url = f"https://api.telegram.org/bot{TOKEN}/deleteMessage?chat_id={chat_id}&message_id={message_id}"
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url)
-    if response.status_code != 200:
-        print("Ошибка удаления сообщения:", response.text)    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url)
+            response.raise_for_status()  # Поднимает исключение для ошибок HTTP
+    except httpx.HTTPStatusError as e:
+        print(f"Ошибка удаления сообщения: {e.response.text}")
+    except Exception as e:
+        print(f"Ошибка при удалении сообщения: {e}")
 
 user_states = {}
 
