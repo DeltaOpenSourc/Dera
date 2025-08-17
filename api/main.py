@@ -95,12 +95,12 @@ async def delete_message(chat_id, message_id):
 user_states = {}
 user_locks = {}
 
-@app.post('/webhook')
 async def webhook(request: Request):
     msg = await request.json()
     print("Получен вебхук:", msg)
 
     if "callback_query" in msg:
+
         callback = msg["callback_query"]
         chat_id = callback["message"]["chat"]["id"]
         message_id = callback["message"]["message_id"]
@@ -122,12 +122,17 @@ async def webhook(request: Request):
     async with user_locks.setdefault(chat_id, asyncio.Lock()):
         if chat_id in user_states and user_states[chat_id] == "awaiting_response":
             await tel_send_message_not_markup(chat_id, f"Обрабатываю ваш запрос: {txt}")
-            neural_response = await generate_response(txt)  
             
-            for part in split_text(neural_response):
-                await tel_send_message_not_markup(chat_id, part)
+            try:
+                neural_response = await generate_response(txt)  
+                for part in split_text(neural_response):
+                    await tel_send_message_not_markup(chat_id, part)
+            except Exception as e:
+                await tel_send_message_not_markup(chat_id, "Произошла ошибка при обработке вашего запроса.")
+                print("Ошибка при генерации ответа:", e)
+            finally:
+                user_states[chat_id] = None 
 
-            user_states[chat_id] = None  
         elif txt.lower() == "/start":
             await tel_send_message(chat_id, 
                 "🎵 Добро пожаловать в наш уникальный музыкальный мир! "
@@ -138,6 +143,7 @@ async def webhook(request: Request):
             )
 
     return JSONResponse(content={"status": "ok"}, status_code=200)
+
 
 @app.get("/")
 async def index():
