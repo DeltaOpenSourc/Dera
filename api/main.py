@@ -1,6 +1,6 @@
 import os
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
 from openai import AsyncOpenAI
 
@@ -87,12 +87,18 @@ async def tel_send_message_not_markup(chat_id, text):
         print("Ошибка отправки сообщения:", response.text)
 
     return response
- 
 
 user_states = {}
 
+async def process_user_request(chat_id, txt):
+    await tel_send_message_not_markup(chat_id, '🏈 Идет обработка...')
+    response_text = await generate_response(txt)
+    for part in split_text(response_text):
+        await tel_send_message_not_markup(chat_id, part)
+    user_states[chat_id] = None 
+
 @app.post('/webhook')
-async def webhook(request: Request):
+async def webhook(request: Request, background_tasks: BackgroundTasks):
     msg = await request.json()
     print("Получен вебхук:", msg)
 
@@ -113,13 +119,7 @@ async def webhook(request: Request):
         return JSONResponse(content={"status": "ignored"}, status_code=200)
 
     if chat_id in user_states and user_states[chat_id] == "awaiting_response":
-        completion = await client.chat.completions.create(
-            model="deepseek/deepseek-r1-0528:free",
-            messages=[{"role": "user", "content": txt}],
-        )
-        for part in split_text(completion.choices[0].message.content):
-           await tel_send_message_not_markup(chat_id, part)
-        user_states[chat_id] = None 
+        background_tasks.add_task(process_user_request, chat_id, txt)
 
     elif txt.lower() == "/start":
         await tel_send_message(chat_id, 
@@ -139,4 +139,3 @@ async def index():
 if __name__ == '__main__':
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 5000)), log_level="info")
-
