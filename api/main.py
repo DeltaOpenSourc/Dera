@@ -52,6 +52,11 @@ async def setwebhook():
     else:
         return JSONResponse(content={"error": f"Error setting webhook: {response.text}"}, status_code=response.status_code)
 
+@app.on_event("startup")
+async def startup_event():
+    await set_webhook()
+
+
 async def tel_send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {
