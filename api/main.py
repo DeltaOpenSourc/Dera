@@ -65,7 +65,7 @@ async def tel_send_message(chat_id, text):
         "reply_markup": {
             "inline_keyboard": [
                 [
-                    {"text": "Открыть Муз Чат", "web_app": {"url": "https://getstarthealth.github.io/Baze/"}},
+                    {"text": "Открыть Муз Чат", "web_app": {"url": "https://dancerlist.github.io/Year/"}},
                     {"text": "Диалог с ИИ", "callback_data": "deepSeek"}
                 ]
             ]
